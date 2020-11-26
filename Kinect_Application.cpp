@@ -4,12 +4,16 @@
 #include <k4arecord/playback.h>
 
 #include <iostream>
+#include <fstream>
+#include <chrono>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
 using namespace std;
 using namespace cv;
+
+
 
 int main(int argc, char*& argv)
 {
@@ -51,6 +55,8 @@ int main(int argc, char*& argv)
 	}
 	cout << "Device: " << device_serial_number << " is opened successfully." << endl;
 
+
+	// Initialise variables
 	k4a::capture capture;
 
 	k4a::image depthImage;
@@ -63,27 +69,35 @@ int main(int argc, char*& argv)
 
 	k4abt::frame body_frame = NULL;
 
-	// Calibration
+	// Calibration and body tracker
 	k4a_calibration_t calibration = device.get_calibration(device_config.depth_mode, device_config.color_resolution);
 	k4abt::tracker tracker = NULL;
 	k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
 	tracker = k4abt::tracker::create(calibration, tracker_config);
+
+	// Creat output file
+	string result = "";
+	ofstream outfile("result.txt");
+
+	// Time measurement
+	typedef chrono::high_resolution_clock clock;
+	typedef chrono::duration<float, milli> mili;
+
 	
-	
 
-
-
-
+	// Main loop to process data
 	while (1)
 	{
-		// get capture immediately  
+		// Get capture immediately
 		if (device.get_capture(&capture, chrono::milliseconds(0)))
 		{
+			//auto t0 = clock::now();
+
 			// Sensor code
 			
-			k4a::image depthImage = capture.get_depth_image();
+			//k4a::image depthImage = capture.get_depth_image();
+			//k4a::image irImage = capture.get_ir_image();
 			k4a::image colorImage = capture.get_color_image();
-			k4a::image irImage = capture.get_ir_image();
 
 			uint8_t* colorTextureBuffer = colorImage.get_buffer();
 			cv::Mat colorFrame = cv::Mat(colorImage.get_height_pixels(),
@@ -93,26 +107,54 @@ int main(int argc, char*& argv)
 			cv::imshow("Kinect color frame", colorFrame);
 
 			// Body Tracking code
-			
-			tracker.enqueue_capture(capture);
 
+			tracker.enqueue_capture(capture);
 			tracker.pop_result(&body_frame);
 
-			cout << body_frame.get_num_bodies() << endl;
-			k4abt_body_t body = body_frame.get_body(0);
+			string frame_result = "";
 
-			k4a_float3_t::_xyz coordinate;
+			if (body_frame.get_num_bodies() > 0) {
 
-			coordinate = body.skeleton.joints[14].position.xyz;
-			cout << "x:" << coordinate.x << "y:" << coordinate.y << "z:" << coordinate.z << endl;
+				k4abt_body_t body = body_frame.get_body(0);
 
+				for (int i = 0; i < 32; i++) {
+					frame_result += to_string(body.skeleton.joints[i].confidence_level);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].position.xyz.x);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].position.xyz.y);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].position.xyz.z);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].orientation.wxyz.x);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].orientation.wxyz.y);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].orientation.wxyz.z);
+					frame_result += ",";
+					frame_result += to_string(body.skeleton.joints[i].orientation.wxyz.w);
+					frame_result += ",";
+				}
+				// Remove last comma
+				frame_result.pop_back();
+				result += frame_result;
+				result += "\n";
+				
+			}
+
+			//auto t1 = clock::now();
+			//cout << mili(t1 - t0).count() << "ms\n";
+
+			// Manual quit option CV
 			if (waitKey(30) == 27){
 				cout << "User Interepted" << endl;
 				break;
 			}
-
 		}
 	}
+
+	// Write to output file
+	outfile << result << endl;
 
 	// Stops camera and close device before exit
 	device.stop_cameras();
