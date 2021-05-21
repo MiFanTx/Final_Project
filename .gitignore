@@ -13,6 +13,8 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.onnx
 *.txt
+*.png
+*.csv
 
 # Mono auto generated files
 mono_crash.*
