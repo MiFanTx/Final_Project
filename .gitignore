@@ -15,6 +15,7 @@
 *.txt
 *.png
 *.csv
+.vscode
 
 # Mono auto generated files
 mono_crash.*
